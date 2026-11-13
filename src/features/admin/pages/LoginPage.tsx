@@ -1,43 +1,59 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Utensils, Lock, Mail, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Utensils, Lock, Mail, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react';
+import { useAdminAuth } from '../hooks/useAdminAuth';
 import { Button } from '../../../components/ui/Button';
 import { Card } from '../../../components/ui/Card';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const [email, setEmail] = useState('manager@bistro.com');
-  const [password, setPassword] = useState('••••••••');
-  const [isLoading, setIsLoading] = useState(false);
+  const { login, loginError, loading, isAuthenticated } = useAdminAuth();
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    // Placeholder login action; feature phase will wire authService.signInStaff
-    setTimeout(() => {
-      setIsLoading(false);
+  const [email, setEmail] = useState('manager@bistro.com');
+  const [password, setPassword] = useState('admin123456');
+
+  // If already authenticated, redirect
+  React.useEffect(() => {
+    if (isAuthenticated) {
       navigate('/admin');
-    }, 600);
+    }
+  }, [isAuthenticated, navigate]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const success = await login({ email: email.trim(), password });
+    if (success) {
+      navigate('/admin');
+    }
   };
 
   return (
-    <div className="min-h-screen bg-forest-950 flex flex-col justify-center items-center p-6 text-stone-100">
+    <div className="min-h-screen bg-forest-950 flex flex-col justify-center items-center p-4 sm:p-6 text-stone-100">
       <div className="max-w-md w-full">
-        {/* Logo and title */}
+        {/* Brand Header */}
         <div className="text-center mb-8">
           <div className="w-14 h-14 rounded-2xl bg-forest-900 text-amber-300 border border-forest-800 flex items-center justify-center mx-auto mb-3 shadow-md">
             <Utensils className="w-7 h-7" />
           </div>
           <h1 className="text-2xl font-extrabold text-white tracking-tight">DineFlow Staff Portal</h1>
-          <p className="text-sm text-stone-400 mt-1">Sign in to access your restaurant operations console</p>
+          <p className="text-xs sm:text-sm text-stone-400 mt-1">
+            Sign in to access real-time kitchen orders & menu governance
+          </p>
         </div>
 
-        {/* Login form card */}
+        {/* Login Card */}
         <Card className="bg-white text-stone-900 border-none shadow-xl p-6 sm:p-8">
           <form onSubmit={handleSubmit} className="space-y-4">
+            {loginError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-xs text-rose-800 font-medium">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{loginError}</span>
+              </div>
+            )}
+
             <div>
               <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-1.5">
-                Staff Email
+                Staff Email Address
               </label>
               <div className="relative">
                 <Mail className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
@@ -45,8 +61,8 @@ export const LoginPage: React.FC = () => {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-forest-800"
-                  placeholder="staff@restaurant.com"
+                  className="w-full pl-10 pr-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-forest-800 font-medium"
+                  placeholder="manager@bistro.com"
                   required
                 />
               </div>
@@ -69,11 +85,18 @@ export const LoginPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Quick Demo Credentials Banner */}
+            {/* Quick Demo Credentials Notice */}
             <div className="p-3 bg-amber-50 rounded-xl border border-amber-200/80 flex items-start gap-2 text-xs text-amber-900">
               <ShieldCheck className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
               <div>
-                <span className="font-bold">Hackathon Demo Mode:</span> Click sign in to enter the admin dashboard directly.
+                <span className="font-bold">Authorized Account:</span> Use{' '}
+                <code className="font-mono bg-amber-100 px-1 py-0.5 rounded font-bold">
+                  manager@bistro.com
+                </code>{' '}
+                with password{' '}
+                <code className="font-mono bg-amber-100 px-1 py-0.5 rounded font-bold">
+                  admin123456
+                </code>
               </div>
             </div>
 
@@ -82,10 +105,10 @@ export const LoginPage: React.FC = () => {
               variant="primary"
               fullWidth
               size="lg"
-              isLoading={isLoading}
+              isLoading={loading}
               rightIcon={<ArrowRight className="w-4 h-4" />}
             >
-              Sign In to Console
+              Sign In to Dashboard
             </Button>
           </form>
         </Card>
