@@ -1,0 +1,16 @@
+-- ==============================================================================
+-- DineFlow - Supabase Initial Database Seed Script
+-- ==============================================================================
+-- This script contains mock seed data for local development and testing.
+-- To be executed after schema migrations are applied.
+--
+-- Entities populated:
+-- 1. Sample Restaurant
+-- 2. Menu Categories (Starters, Main Course, Beverages, Desserts)
+-- 3. Menu Items (with descriptions, prices, image URLs, and stock status)
+-- 4. Initial Restaurant Staff profile linking to auth.users
+-- 5. Sample Initial Orders (Pending, Preparing, Completed)
+-- ==============================================================================
+
+-- Seed data will be executed once the database schema migration is finalized.
+-- See docs/DATABASE.md for full relational model, constraints, and RLS definitions.
