@@ -26,10 +26,13 @@ erDiagram
     restaurants {
         uuid id PK
         text name
-        text slug
+        text slug UK
+        text description
         text address
         text phone
+        text email
         text currency
+        boolean is_active
         timestamp created_at
         timestamp updated_at
     }
@@ -68,11 +71,14 @@ erDiagram
     orders {
         uuid id PK
         uuid restaurant_id FK
+        text order_number
         text order_type
         text table_number
         text customer_name
         text customer_phone
         jsonb items
+        numeric subtotal
+        numeric tax_amount
         numeric total_amount
         text status
         text notes
@@ -93,9 +99,12 @@ Represents an onboarded restaurant location.
 | `id` | `UUID` | Primary Key, `default gen_random_uuid()` | Unique restaurant identifier |
 | `name` | `TEXT` | `NOT NULL` | Business legal/trading name |
 | `slug` | `TEXT` | `UNIQUE, NOT NULL` | URL-friendly identifier (e.g., `the-bistro`) |
-| `address` | `TEXT` | `NULL` | Physical address |
+| `description` | `TEXT` | `NULL` | Business concept / description |
+| `address` | `TEXT` | `NULL` | Physical street address |
 | `phone` | `TEXT` | `NULL` | Contact telephone number |
+| `email` | `TEXT` | `NULL` | Contact email address |
 | `currency` | `TEXT` | `DEFAULT 'USD', NOT NULL` | Currency symbol/code (`USD`, `EUR`, `INR`, etc.) |
+| `is_active` | `BOOLEAN` | `DEFAULT true, NOT NULL` | Operating status flag |
 | `created_at` | `TIMESTAMPTZ` | `DEFAULT now(), NOT NULL` | Record creation timestamp |
 | `updated_at` | `TIMESTAMPTZ` | `DEFAULT now(), NOT NULL` | Last update timestamp |
 
@@ -124,7 +133,7 @@ Individual dishes and beverages available for order.
 | `category_id` | `UUID` | `REFERENCES menu_categories(id) ON DELETE SET NULL, NULL` | Associated category |
 | `name` | `TEXT` | `NOT NULL` | Name of the dish |
 | `description` | `TEXT` | `NULL` | Ingredients, description, or allergy notes |
-| `price` | `NUMERIC(10,2)`| `NOT NULL, CHECK (price >= 0)` | Price per unit |
+| `price` | `NUMERIC(10,2)`| `NOT NULL, CHECK (price >= 0)` | Authoritative price per unit |
 | `image_url` | `TEXT` | `NULL` | Public image preview URL |
 | `is_veg` | `BOOLEAN` | `DEFAULT false, NOT NULL` | Vegetarian indicator |
 | `is_available` | `BOOLEAN` | `DEFAULT true, NOT NULL` | 86'd / stock status toggle |
@@ -134,16 +143,18 @@ Individual dishes and beverages available for order.
 ---
 
 ### 3.4. `restaurant_staff`
-Links Supabase authenticated accounts to a specific restaurant.
+Links Supabase authenticated accounts (`auth.users`) to a specific restaurant.
 
 | Column | Type | Constraints | Description |
 | :--- | :--- | :--- | :--- |
 | `id` | `UUID` | Primary Key, `default gen_random_uuid()` | Staff profile identifier |
-| `user_id` | `UUID` | `REFERENCES auth.users(id) ON DELETE CASCADE, UNIQUE, NOT NULL` | Supabase Auth user ID |
+| `user_id` | `UUID` | `REFERENCES auth.users(id) ON DELETE CASCADE, NOT NULL` | Supabase Auth user ID |
 | `restaurant_id`| `UUID` | `REFERENCES restaurants(id) ON DELETE CASCADE, NOT NULL` | Operating restaurant |
 | `full_name` | `TEXT` | `NOT NULL` | Staff member's display name |
-| `role` | `TEXT` | `DEFAULT 'staff', NOT NULL` | Access role (`admin`, `manager`, `staff`) |
+| `role` | `TEXT` | `DEFAULT 'staff', CHECK (role IN ('admin', 'manager', 'staff'))` | Access role |
 | `created_at` | `TIMESTAMPTZ` | `DEFAULT now(), NOT NULL` | Creation timestamp |
+
+*Note: Enforces unique constraint `UNIQUE (restaurant_id, user_id)`.*
 
 ---
 
@@ -154,33 +165,38 @@ Represents an incoming order ticket.
 | :--- | :--- | :--- | :--- |
 | `id` | `UUID` | Primary Key, `default gen_random_uuid()` | Order ticket identifier |
 | `restaurant_id`| `UUID` | `REFERENCES restaurants(id) ON DELETE CASCADE, NOT NULL` | Target restaurant |
+| `order_number` | `TEXT` | `NOT NULL` | Human-readable order number (e.g., `#104`) |
 | `order_type` | `TEXT` | `CHECK (order_type IN ('dine_in', 'takeaway')), NOT NULL` | Order mode |
 | `table_number` | `TEXT` | `NULL` | Table number (required if `order_type = 'dine_in'`) |
 | `customer_name`| `TEXT` | `NOT NULL` | Customer display name |
 | `customer_phone`|`TEXT` | `NULL` | Customer contact number |
 | `items` | `JSONB` | `NOT NULL` | Array of ordered items, snapshot prices & quantities |
+| `subtotal` | `NUMERIC(10,2)`| `NOT NULL, CHECK (subtotal >= 0)` | Verified items subtotal |
+| `tax_amount` | `NUMERIC(10,2)`| `NOT NULL, DEFAULT 0.00` | Applicable tax amount |
 | `total_amount` | `NUMERIC(10,2)`| `NOT NULL, CHECK (total_amount >= 0)` | Total payable amount |
 | `status` | `TEXT` | `DEFAULT 'pending', CHECK (status IN ('pending', 'preparing', 'ready', 'completed', 'cancelled'))` | Order state |
 | `notes` | `TEXT` | `NULL` | Kitchen notes / special requests |
 | `created_at` | `TIMESTAMPTZ` | `DEFAULT now(), NOT NULL` | Placement timestamp |
 | `updated_at` | `TIMESTAMPTZ` | `DEFAULT now(), NOT NULL` | Last status modification timestamp |
 
-#### JSONB `items` Structure Example
+#### Verified JSONB `items` Structure Example
 ```json
 [
   {
-    "itemId": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "itemId": "c0eebc99-9c0b-4ef8-bb6d-6bb9bd380c04",
     "name": "Classic Truffle Burger",
-    "price": 14.50,
+    "price": 16.50,
     "quantity": 2,
-    "instructions": "No onions please"
+    "instructions": "Extra crispy fries",
+    "itemTotal": 33.00
   },
   {
-    "itemId": "b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22",
-    "name": "House Brewed Iced Tea",
-    "price": 4.00,
+    "itemId": "c0eebc99-9c0b-4ef8-bb6d-6bb9bd380c08",
+    "name": "House Brewed Citrus Iced Tea",
+    "price": 4.50,
     "quantity": 1,
-    "instructions": "Less ice"
+    "instructions": "Light ice",
+    "itemTotal": 4.50
   }
 ]
 ```
@@ -189,25 +205,52 @@ Represents an incoming order ticket.
 
 ## 4. Row Level Security (RLS) Strategy
 
-All tables enforce RLS:
+All tables enforce Row Level Security:
 
 1. **`restaurants`**:
-   - `SELECT`: Public access (`true`).
-   - `INSERT / UPDATE / DELETE`: Only authenticated staff where `restaurant_staff.role = 'admin'`.
+   - `SELECT`: Public access where `is_active = true` OR staff member of the restaurant.
+   - `UPDATE`: Authenticated staff with role `admin`.
 2. **`menu_categories` & `menu_items`**:
-   - `SELECT`: Public access (`true`).
+   - `SELECT`: Public access for items belonging to active restaurants.
    - `INSERT / UPDATE / DELETE`: Authenticated staff linked to `restaurant_id`.
-3. **`orders`**:
-   - `INSERT`: Public anonymous users (`true`).
-   - `SELECT (single)`: Public anonymous users where `id = current_order_id` (via receipt token or explicit ID query).
-   - `SELECT (all) & UPDATE`: Authenticated staff where `restaurant_id = auth.user_restaurant_id()`.
+3. **`restaurant_staff`**:
+   - `SELECT`: Authenticated staff for their own record or members within their restaurant.
+   - `INSERT / UPDATE / DELETE`: Authenticated staff with role `admin`.
+   - **Anonymous access is completely blocked.**
+4. **`orders`**:
+   - `SELECT`: Authenticated staff where `restaurant_id` matches their staff membership.
+   - `UPDATE`: Authenticated staff (for status progression: `pending` -> `preparing` -> `ready` -> `completed`).
+   - Direct public table reads and inserts are restricted. Public order creation is safely handled via the server-side RPC `create_customer_order`.
 
 ---
 
-## 5. Supabase Realtime Publication
+## 5. Stored Procedures & Server-Side Functions
 
-To enable the Live Kitchen Display System, the `orders` table is registered in the Supabase Realtime publication:
+### 5.1. `create_customer_order`
+A transactional `SECURITY DEFINER` function that:
+1. Validates that the restaurant exists and is active.
+2. Enforces table number if `order_type = 'dine_in'`.
+3. Validates customer name and line items.
+4. Verifies that every requested item belongs to the restaurant.
+5. Verifies that every requested item is currently available (`is_available = true`).
+6. Locks the item rows (`FOR SHARE`) and computes line totals using authoritative database prices.
+7. Generates a unique human-readable order number (`#101`, `#102`, etc.).
+8. Inserts the order record transactionally.
+9. Returns a complete confirmation payload including `orderId`, `orderNumber`, `totalAmount`, and items snapshot.
+
+### 5.2. `get_customer_order`
+A `SECURITY DEFINER` function allowing customers to retrieve their specific order status by `p_order_id` for tracking and receipts without exposing other restaurant tickets.
+
+### 5.3. `link_demo_staff_user`
+A helper procedure allowing developers to associate an email registered in Supabase Auth (`auth.users`) to the demo restaurant staff table.
+
+---
+
+## 6. Supabase Realtime Publication
+
+To enable the Live Kitchen Display System, the `orders` table is registered in the Supabase Realtime publication and configured with full replica identity:
 
 ```sql
-ALTER PUBLICATION supabase_realtime ADD TABLE orders;
+ALTER TABLE public.orders REPLICA IDENTITY FULL;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.orders;
 ```

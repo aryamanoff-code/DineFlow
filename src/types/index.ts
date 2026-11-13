@@ -28,9 +28,12 @@ export interface Restaurant {
   id: string;
   name: string;
   slug: string;
+  description?: string;
   address?: string;
   phone?: string;
+  email?: string;
   currency: string;
+  isActive: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -68,11 +71,14 @@ export interface OrderCartItem {
 export interface Order {
   id: string;
   restaurantId: string;
+  orderNumber: string;
   orderType: OrderType;
   tableNumber?: string | null;
   customerName: string;
   customerPhone?: string | null;
   items: OrderCartItem[];
+  subtotal: number;
+  taxAmount?: number;
   totalAmount: number;
   status: OrderStatus;
   notes?: string | null;
