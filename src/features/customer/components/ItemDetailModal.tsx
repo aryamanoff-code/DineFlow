@@ -118,8 +118,16 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
 
         {/* Footer Add Action */}
         <div className="p-4 border-t border-surface-border bg-white shrink-0">
-          <Button variant="primary" fullWidth size="lg" onClick={handleAdd}>
-            Add to Cart · {formatCurrency(totalPrice, currency)}
+          <Button
+            variant="primary"
+            fullWidth
+            size="lg"
+            onClick={handleAdd}
+            disabled={!item.isAvailable}
+          >
+            {item.isAvailable
+              ? `Add to Cart · ${formatCurrency(totalPrice, currency)}`
+              : 'Item Sold Out'}
           </Button>
         </div>
       </div>

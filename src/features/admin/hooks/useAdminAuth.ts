@@ -18,8 +18,15 @@ export const useAdminAuth = (): UseAdminAuthReturn => {
 
   useEffect(() => {
     const current = adminService.getCurrentSession();
-    setSession(current);
-    setLoading(false);
+    if (current) {
+      setSession(current);
+      setLoading(false);
+    } else {
+      adminService.getCurrentSessionAsync().then((res) => {
+        setSession(res.data);
+        setLoading(false);
+      });
+    }
   }, []);
 
   const login = useCallback(async (credentials: SignInCredentials): Promise<boolean> => {
@@ -39,8 +46,8 @@ export const useAdminAuth = (): UseAdminAuthReturn => {
     return true;
   }, []);
 
-  const logout = useCallback(() => {
-    adminService.signOut();
+  const logout = useCallback(async () => {
+    await adminService.signOut();
     setSession(null);
   }, []);
 

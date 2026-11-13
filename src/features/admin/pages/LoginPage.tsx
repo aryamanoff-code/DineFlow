@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { Utensils, Lock, Mail, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { Utensils, Lock, Mail, ShieldCheck, AlertCircle, ArrowRight } from 'lucide-react';
 import { useAdminAuth } from '../hooks/useAdminAuth';
 import { Button } from '../../../components/ui/Button';
 import { Card } from '../../../components/ui/Card';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = (location.state as any)?.from?.pathname || '/admin';
   const { login, loginError, loading, isAuthenticated } = useAdminAuth();
 
   const [email, setEmail] = useState('manager@bistro.com');
@@ -15,15 +17,15 @@ export const LoginPage: React.FC = () => {
   // If already authenticated, redirect
   React.useEffect(() => {
     if (isAuthenticated) {
-      navigate('/admin');
+      navigate(from, { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, navigate, from]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const success = await login({ email: email.trim(), password });
     if (success) {
-      navigate('/admin');
+      navigate(from, { replace: true });
     }
   };
 

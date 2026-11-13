@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Outlet, NavLink, Link, useNavigate, useLocation } from 'react-router-dom';
+import { Outlet, NavLink, Link, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   ClipboardList,
@@ -11,6 +11,8 @@ import {
   Radio,
   ExternalLink,
 } from 'lucide-react';
+import { useAdminAuth } from '../../features/admin/hooks/useAdminAuth';
+import { LoadingState } from '../ui/LoadingState';
 
 const navItems = [
   { to: '/admin', label: 'Overview', icon: LayoutDashboard, end: true },
@@ -21,11 +23,12 @@ const navItems = [
 
 export const AdminLayout: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { session, isAuthenticated, loading, logout } = useAdminAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const handleLogout = () => {
-    // Auth placeholder: redirect to login
+  const handleLogout = async () => {
+    await logout();
     navigate('/admin/login');
   };
 
@@ -36,6 +39,23 @@ export const AdminLayout: React.FC = () => {
     if (location.pathname.startsWith('/admin/settings')) return 'Restaurant Settings & QR Studio';
     return 'Admin Dashboard';
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-forest-950 flex items-center justify-center p-4">
+        <LoadingState
+          title="Verifying Staff Credentials"
+          description="Connecting to admin console..."
+          fullHeight
+        />
+      </div>
+    );
+  }
+
+  // Enforce Protected Route: Redirect unauthorized users to login
+  if (!isAuthenticated) {
+    return <Navigate to="/admin/login" state={{ from: location }} replace />;
+  }
 
   return (
     <div className="min-h-screen bg-stone-100 flex flex-col md:flex-row font-sans">
@@ -114,11 +134,15 @@ export const AdminLayout: React.FC = () => {
           <div className="pt-2 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-full bg-forest-800 flex items-center justify-center font-bold text-xs text-amber-200">
-                M
+                {session?.profile?.fullName?.charAt(0).toUpperCase() || 'M'}
               </div>
-              <div>
-                <div className="text-xs font-bold text-white">Manager</div>
-                <div className="text-[10px] text-stone-400">The Bistro Demo</div>
+              <div className="min-w-0">
+                <div className="text-xs font-bold text-white truncate max-w-[120px]">
+                  {session?.profile?.fullName || 'Staff Member'}
+                </div>
+                <div className="text-[10px] text-stone-400 uppercase tracking-wider font-semibold">
+                  {session?.profile?.role || 'Staff'} · The Bistro
+                </div>
               </div>
             </div>
             <button

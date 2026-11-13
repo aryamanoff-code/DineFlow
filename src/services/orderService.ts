@@ -1,6 +1,7 @@
 import { Order, OrderStatus, CreateOrderDTO, ServiceResponse } from '../types';
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { DEMO_RESTAURANT } from './restaurantService';
+import { menuService } from './menuService';
 
 // Default mock orders matching supabase/seed.sql
 export const DEMO_ORDERS: Order[] = [
@@ -66,6 +67,13 @@ export const DEMO_ORDERS: Order[] = [
 let liveOrdersStore: Order[] = [...DEMO_ORDERS];
 let simulatedSequence = 104;
 
+type OrderListener = {
+  restaurantId: string;
+  onInsert: (order: Order) => void;
+  onUpdate: (order: Order) => void;
+};
+const localListeners = new Set<OrderListener>();
+
 const mapOrderRow = (row: any): Order => ({
   id: row.id,
   restaurantId: row.restaurant_id,
@@ -106,6 +114,20 @@ export const orderService = {
     }
 
     try {
+      // 2. Validate Dish Availability
+      const menuRes = await menuService.getMenu(payload.restaurantId);
+      if (menuRes.data?.items) {
+        for (const item of payload.items) {
+          const found = menuRes.data.items.find((i) => i.id === item.itemId);
+          if (found && !found.isAvailable) {
+            return {
+              data: null,
+              error: `Menu item "${found.name}" is currently sold out and unavailable`,
+            };
+          }
+        }
+      }
+
       if (isSupabaseConfigured) {
         // Execute server-side RPC for price calculation & atomicity
         const { data, error } = await supabase.rpc('create_customer_order', {
@@ -147,6 +169,18 @@ export const orderService = {
 
         // Cache into live order store
         liveOrdersStore = [confirmedOrder, ...liveOrdersStore];
+
+        // Notify local subscribers
+        localListeners.forEach((listener) => {
+          if (listener.restaurantId === payload.restaurantId) {
+            try {
+              listener.onInsert(confirmedOrder);
+            } catch (err) {
+              console.warn('[orderService] Listener error on insert:', err);
+            }
+          }
+        });
+
         return { data: confirmedOrder, error: null };
       }
 
@@ -175,6 +209,18 @@ export const orderService = {
       };
 
       liveOrdersStore = [confirmedOrder, ...liveOrdersStore];
+
+      // Notify local subscribers
+      localListeners.forEach((listener) => {
+        if (listener.restaurantId === payload.restaurantId) {
+          try {
+            listener.onInsert(confirmedOrder);
+          } catch (err) {
+            console.warn('[orderService] Listener error on insert:', err);
+          }
+        }
+      });
+
       return { data: confirmedOrder, error: null };
     } catch (err: any) {
       return { data: null, error: err.message || 'Failed to submit order' };
@@ -280,6 +326,18 @@ export const orderService = {
         }
         const updated = mapOrderRow(data);
         liveOrdersStore = liveOrdersStore.map((o) => (o.id === orderId ? updated : o));
+
+        // Notify local subscribers
+        localListeners.forEach((listener) => {
+          if (listener.restaurantId === updated.restaurantId) {
+            try {
+              listener.onUpdate(updated);
+            } catch (err) {
+              console.warn('[orderService] Listener error on update:', err);
+            }
+          }
+        });
+
         return { data: updated, error: null };
       }
 
@@ -288,6 +346,18 @@ export const orderService = {
       if (match) {
         match.status = status;
         match.updatedAt = new Date().toISOString();
+
+        // Notify local subscribers
+        localListeners.forEach((listener) => {
+          if (listener.restaurantId === match.restaurantId) {
+            try {
+              listener.onUpdate({ ...match });
+            } catch (err) {
+              console.warn('[orderService] Listener error on update:', err);
+            }
+          }
+        });
+
         return { data: { ...match }, error: null };
       }
       return { data: null, error: 'Order not found' };
@@ -305,33 +375,41 @@ export const orderService = {
     onInsert: (order: Order) => void,
     onUpdate: (order: Order) => void
   ): () => void {
-    if (!isSupabaseConfigured) {
-      return () => {};
+    const listener: OrderListener = { restaurantId, onInsert, onUpdate };
+    localListeners.add(listener);
+
+    let supabaseUnsubscribe = () => {};
+
+    if (isSupabaseConfigured) {
+      const channelName = `realtime:orders:${restaurantId}`;
+      const channel = supabase
+        .channel(channelName)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'orders', filter: `restaurant_id=eq.${restaurantId}` },
+          (payload) => {
+            const mapped = mapOrderRow(payload.new);
+            onInsert(mapped);
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'orders', filter: `restaurant_id=eq.${restaurantId}` },
+          (payload) => {
+            const mapped = mapOrderRow(payload.new);
+            onUpdate(mapped);
+          }
+        )
+        .subscribe();
+
+      supabaseUnsubscribe = () => {
+        supabase.removeChannel(channel);
+      };
     }
 
-    const channelName = `realtime:orders:${restaurantId}`;
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'orders', filter: `restaurant_id=eq.${restaurantId}` },
-        (payload) => {
-          const mapped = mapOrderRow(payload.new);
-          onInsert(mapped);
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'orders', filter: `restaurant_id=eq.${restaurantId}` },
-        (payload) => {
-          const mapped = mapOrderRow(payload.new);
-          onUpdate(mapped);
-        }
-      )
-      .subscribe();
-
     return () => {
-      supabase.removeChannel(channel);
+      localListeners.delete(listener);
+      supabaseUnsubscribe();
     };
   },
 };
