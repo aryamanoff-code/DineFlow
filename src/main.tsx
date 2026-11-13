@@ -1,9 +1,16 @@
-/**
- * DineFlow - Application Entry Point Placeholder
- *
- * This file serves as the root bootstrap file for the React + Vite + TypeScript application.
- * Application logic and routing providers will be mounted here during feature implementation.
- */
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './app/App';
+import './styles/index.css';
 
-// Placeholder entry point: Feature implementation scheduled post repository initialization.
-export {};
+const rootElement = document.getElementById('root');
+
+if (!rootElement) {
+  throw new Error('Failed to find root mounting element.');
+}
+
+ReactDOM.createRoot(rootElement).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
