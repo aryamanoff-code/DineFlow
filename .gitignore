@@ -52,3 +52,5 @@ lerna-debug.log*
 
 # Supabase local / temporary artifacts
 .supabase/local
+
+.vercel
